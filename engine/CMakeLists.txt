@@ -23,6 +23,7 @@ endif()
 add_library(ghostnet_core
     src/event.cpp
     src/scheduler.cpp
+    src/topology.cpp
 )
 
 target_include_directories(ghostnet_core PUBLIC
@@ -30,19 +31,18 @@ target_include_directories(ghostnet_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# Standalone CLI Executable for testing and local runs
+# Standalone CLI Executable
 add_executable(ghostnet_cli
     src/main.cpp
 )
 target_link_libraries(ghostnet_cli PRIVATE ghostnet_core)
 
-# Testing using GoogleTest via FetchContent
+# Testing using GoogleTest
 include(FetchContent)
 FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
-# For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
@@ -50,6 +50,7 @@ enable_testing()
 
 add_executable(engine_tests
     tests/test_scheduler.cpp
+    tests/test_topology.cpp
 )
 target_link_libraries(engine_tests PRIVATE
     ghostnet_core
