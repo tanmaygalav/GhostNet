@@ -66,6 +66,7 @@ add_executable(engine_tests
     tests/test_request_rng.cpp
     tests/test_engine.cpp
     tests/test_scenario_loader.cpp
+    tests/test_faults_and_queues.cpp
 )
 target_link_libraries(engine_tests PRIVATE
     ghostnet_core

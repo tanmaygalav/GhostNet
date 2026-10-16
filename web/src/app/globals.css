@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #080c14;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Base custom classes to guarantee styling regardless of Tailwind version */
+.gn-topbar {
+  height: 52px;
+  background: #0d121f;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 20;
+}
+
+.gn-sidebar {
+  width: 240px;
+  background: #0d121f;
+  border-right: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  z-index: 10;
+}
+
+.gn-inspector {
+  width: 280px;
+  background: #0d121f;
+  border-left: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  z-index: 10;
+  overflow-y: auto;
+}
+
+.gn-bottombar {
+  height: 90px;
+  background: #0d121f;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px;
+  z-index: 20;
+}
+
+.gn-palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: #151d30;
+  border: 1px solid #243048;
+  border-radius: 8px;
+  color: #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.gn-palette-btn:hover {
+  background: #1c2742;
+  border-color: #06b6d4;
+  transform: translateY(-1px);
+}
+
+.gn-input {
+  width: 100%;
+  background: #151d30;
+  border: 1px solid #243048;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #f8fafc;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.gn-input:focus {
+  border-color: #06b6d4;
+  box-shadow: 0 0 0 1px #06b6d4;
+}
+
+.gn-stat-card {
+  background: #151d30;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* React Flow Canvas and Custom Node Styling */
+.react-flow__background {
+  background-color: #080c14 !important;
+}
+
+.react-flow__edge-path {
+  stroke: #0ea5e9 !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: #06b6d4 !important;
+  border: 2px solid #080c14 !important;
+  border-radius: 50% !important;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.4);
+}

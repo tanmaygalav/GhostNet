@@ -16,7 +16,6 @@ int main(int argc, char* argv[]) {
         ss << file.rdbuf();
         scenario_json_content = ss.str();
     } else {
-        // Read directly from stdin
         std::ostringstream ss;
         ss << std::cin.rdbuf();
         scenario_json_content = ss.str();
@@ -34,12 +33,18 @@ int main(int argc, char* argv[]) {
         std::cerr << "[GHOSTNET] Starting discrete-event simulation...\n";
         std::cerr << "[GHOSTNET] Nodes: " << scenario.topology.node_count()
                   << " | Links: " << scenario.topology.link_count()
+                  << " | Workloads: " << scenario.workloads.size()
+                  << " | Faults: " << scenario.faults.size()
                   << " | Seed: " << scenario.engine_config.seed << "\n";
 
         ghostnet::SimulationEngine engine(scenario.engine_config, std::move(scenario.topology));
 
         for (const auto& w : scenario.workloads) {
             engine.add_workload(w);
+        }
+
+        for (const auto& f : scenario.faults) {
+            engine.schedule_fault(f);
         }
 
         auto status = engine.run();
@@ -49,9 +54,7 @@ int main(int argc, char* argv[]) {
             status, engine.current_time(), engine.processed_event_count(), metrics
         );
 
-        // Authoritative machine-readable output sent exclusively to stdout
         std::cout << output.dump(2) << std::endl;
-
         std::cerr << "[GHOSTNET] Run finished with status: " << output["status"] << "\n";
         return 0;
 

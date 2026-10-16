@@ -13,6 +13,11 @@ static NodeType parse_node_type(const std::string& type_str) {
     return NodeType::SERVICE;
 }
 
+static FaultType parse_fault_type(const std::string& type_str) {
+    if (type_str == "LATENCY_SPIKE") return FaultType::LATENCY_SPIKE;
+    return FaultType::SERVICE_OUTAGE;
+}
+
 ParsedScenario ScenarioLoader::from_json(const nlohmann::json& j) {
     ParsedScenario scenario;
 
@@ -36,7 +41,7 @@ ParsedScenario ScenarioLoader::from_json(const nlohmann::json& j) {
             node.queue_capacity = item.value("queue_capacity", 100U);
             
             if (!scenario.topology.add_node(std::move(node))) {
-                throw std::runtime_error("Duplicate node ID in scenario: " + std::to_string(item.at("id").get<ComponentId>()));
+                throw std::runtime_error("Duplicate node ID: " + std::to_string(node.id));
             }
         }
     }
@@ -54,12 +59,11 @@ ParsedScenario ScenarioLoader::from_json(const nlohmann::json& j) {
             link.queue_capacity = item.value("queue_capacity", 1000U);
 
             if (!scenario.topology.add_link(std::move(link))) {
-                throw std::runtime_error("Duplicate link ID in scenario: " + std::to_string(item.at("id").get<LinkId>()));
+                throw std::runtime_error("Duplicate link ID: " + std::to_string(link.id));
             }
         }
     }
 
-    // Validate topology
     auto validation = scenario.topology.validate();
     if (!validation.valid) {
         std::string err_msg = "Invalid topology: ";
@@ -80,6 +84,20 @@ ParsedScenario ScenarioLoader::from_json(const nlohmann::json& j) {
             w.timeout_us = item.value("timeout_us", 1'000'000ULL);
             w.payload_bytes = item.value("payload_bytes", 64ULL);
             scenario.workloads.push_back(w);
+        }
+    }
+
+    // 5. Fault Schedules
+    if (j.contains("faults") && j["faults"].is_array()) {
+        for (const auto& item : j["faults"]) {
+            FaultConfig fault;
+            fault.id = item.at("id").get<uint32_t>();
+            fault.type = parse_fault_type(item.value("type", "SERVICE_OUTAGE"));
+            fault.target_component_id = item.at("target_component_id").get<ComponentId>();
+            fault.start_time_us = item.at("start_time_us").get<SimTime>();
+            fault.duration_us = item.at("duration_us").get<SimTime>();
+            fault.extra_latency_us = item.value("extra_latency_us", 0ULL);
+            scenario.faults.push_back(fault);
         }
     }
 

@@ -1,0 +1,59 @@
+{
+  "config": {
+    "seed": 1001,
+    "max_duration_us": 4000000,
+    "max_events": 100000
+  },
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Frontend-Client",
+      "type": "CLIENT"
+    },
+    {
+      "id": 2,
+      "name": "Backend-Worker",
+      "type": "SERVICE",
+      "processing_delay_us": 5000,
+      "max_concurrency": 2,
+      "queue_capacity": 5
+    }
+  ],
+  "links": [
+    {
+      "id": 10,
+      "source_id": 1,
+      "target_id": 2,
+      "propagation_delay_us": 5000,
+      "bandwidth_bps": 10000000,
+      "loss_probability": 0.0
+    }
+  ],
+  "workloads": [
+    {
+      "source_id": 1,
+      "target_id": 2,
+      "arrival_rate_rps": 10.0,
+      "duration_us": 4000000,
+      "timeout_us": 1000000,
+      "payload_bytes": 128
+    }
+  ],
+  "faults": [
+    {
+      "id": 1,
+      "type": "SERVICE_OUTAGE",
+      "target_component_id": 2,
+      "start_time_us": 1000000,
+      "duration_us": 1000000
+    },
+    {
+      "id": 2,
+      "type": "LATENCY_SPIKE",
+      "target_component_id": 10,
+      "start_time_us": 2500000,
+      "duration_us": 500000,
+      "extra_latency_us": 20000
+    }
+  ]
+}

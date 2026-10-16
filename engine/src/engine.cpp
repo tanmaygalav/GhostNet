@@ -39,6 +39,17 @@ void SimulationEngine::add_workload(const WorkloadConfig& workload) {
     }
 }
 
+void SimulationEngine::schedule_fault(const FaultConfig& fault) {
+    registered_faults_[fault.id] = fault;
+    
+    // Schedule activation
+    scheduler_.schedule(fault.start_time_us, EventType::FAULT_ACTIVATED, 0, fault.target_component_id, 0, fault.id);
+    
+    // Schedule recovery
+    SimTime recovery_time = fault.start_time_us + fault.duration_us;
+    scheduler_.schedule(recovery_time, EventType::FAULT_RECOVERED, 0, fault.target_component_id, 0, fault.id);
+}
+
 RunStatus SimulationEngine::run() {
     status_ = RunStatus::RUNNING;
 
@@ -81,6 +92,12 @@ void SimulationEngine::handle_event(const Event& event) {
         case EventType::TIMEOUT:
             handle_timeout(event);
             break;
+        case EventType::FAULT_ACTIVATED:
+            handle_fault_activated(event);
+            break;
+        case EventType::FAULT_RECOVERED:
+            handle_fault_recovered(event);
+            break;
         default:
             break;
     }
@@ -101,14 +118,12 @@ void SimulationEngine::handle_request_generated(const Event& event) {
         return;
     }
 
-    // Evaluate packet loss
     if (rng_.evaluate_loss(link->loss_probability())) {
         req.transition_to(RequestState::FAILED_LOSS, scheduler_.current_time());
         metrics_.record_loss_drop();
         return;
     }
 
-    // Schedule arrival across the link
     req.transition_to(RequestState::IN_TRANSIT, scheduler_.current_time());
     SimTime transit_time = link->propagation_delay() + link->calculate_serialization_delay(req.payload_bytes());
     SimTime arrival_time = scheduler_.current_time() + transit_time;
@@ -123,28 +138,68 @@ void SimulationEngine::handle_link_arrival(const Event& event) {
     }
     Request& req = req_it->second;
 
-    const Node* target_node = topology_.get_node(event.target_id);
+    Node* target_node = topology_.get_node_mut(event.target_id);
     if (!target_node || !target_node->is_available()) {
         req.transition_to(RequestState::FAILED_SERVICE_DOWN, scheduler_.current_time());
         metrics_.record_service_down();
         return;
     }
 
-    req.transition_to(RequestState::PROCESSING, scheduler_.current_time());
-    SimTime finish_time = scheduler_.current_time() + target_node->base_processing_delay();
-
-    scheduler_.schedule(finish_time, EventType::SERVICE_PROCESS_COMPLETE, event.source_id, event.target_id, req.id());
+    // Try acquiring worker immediately
+    if (target_node->has_free_worker()) {
+        target_node->acquire_worker();
+        req.transition_to(RequestState::PROCESSING, scheduler_.current_time());
+        SimTime finish_time = scheduler_.current_time() + target_node->base_processing_delay();
+        scheduler_.schedule(finish_time, EventType::SERVICE_PROCESS_COMPLETE, event.source_id, event.target_id, req.id());
+    } else {
+        // Enqueue request
+        if (!target_node->enqueue_request(req.id())) {
+            // Queue full -> Backpressure failure
+            req.transition_to(RequestState::FAILED_QUEUE_OVERFLOW, scheduler_.current_time());
+            metrics_.record_queue_overflow();
+            return;
+        }
+        req.transition_to(RequestState::SERVICE_QUEUE, scheduler_.current_time());
+    }
 }
 
 void SimulationEngine::handle_service_process_complete(const Event& event) {
-    auto req_it = requests_.find(event.request_id);
-    if (req_it == requests_.end() || req_it->second.is_terminal()) {
-        return;
+    Node* target_node = topology_.get_node_mut(event.target_id);
+    if (target_node) {
+        target_node->release_worker();
     }
-    Request& req = req_it->second;
 
-    req.transition_to(RequestState::COMPLETED, scheduler_.current_time());
-    metrics_.record_completion(req.total_latency());
+    auto req_it = requests_.find(event.request_id);
+    if (req_it != requests_.end() && !req_it->second.is_terminal()) {
+        Request& req = req_it->second;
+        req.transition_to(RequestState::COMPLETED, scheduler_.current_time());
+        metrics_.record_completion(req.total_latency());
+    }
+
+    // If there are waiting requests in queue, dispatch next one
+    if (target_node) {
+        dispatch_service_work(target_node);
+    }
+}
+
+void SimulationEngine::dispatch_service_work(Node* service_node) {
+    while (service_node->has_free_worker() && service_node->current_queue_depth() > 0) {
+        auto next_req_opt = service_node->dequeue_request();
+        if (!next_req_opt) break;
+
+        RequestId next_id = *next_req_opt;
+        auto req_it = requests_.find(next_id);
+        if (req_it == requests_.end() || req_it->second.is_terminal()) {
+            continue; // Skip timed-out/cancelled requests that sat in queue
+        }
+
+        service_node->acquire_worker();
+        Request& waiting_req = req_it->second;
+        waiting_req.transition_to(RequestState::PROCESSING, scheduler_.current_time());
+
+        SimTime finish_time = scheduler_.current_time() + service_node->base_processing_delay();
+        scheduler_.schedule(finish_time, EventType::SERVICE_PROCESS_COMPLETE, waiting_req.source_id(), service_node->id(), next_id);
+    }
 }
 
 void SimulationEngine::handle_timeout(const Event& event) {
@@ -153,9 +208,47 @@ void SimulationEngine::handle_timeout(const Event& event) {
         return;
     }
     Request& req = req_it->second;
-
     req.transition_to(RequestState::FAILED_TIMEOUT, scheduler_.current_time());
     metrics_.record_timeout();
+}
+
+void SimulationEngine::handle_fault_activated(const Event& event) {
+    auto it = registered_faults_.find(event.fault_id);
+    if (it == registered_faults_.end()) return;
+
+    const FaultConfig& fault = it->second;
+    if (fault.type == FaultType::SERVICE_OUTAGE) {
+        Node* node = topology_.get_node_mut(fault.target_component_id);
+        if (node) {
+            node->set_state(ComponentState::DOWN);
+            // Drop queued items during catastrophic outage
+            node->clear_queue();
+        }
+    } else if (fault.type == FaultType::LATENCY_SPIKE) {
+        // Target component is Link ID
+        auto* link = const_cast<Link*>(topology_.get_link(fault.target_component_id));
+        if (link) {
+            link->set_extra_latency(fault.extra_latency_us);
+        }
+    }
+}
+
+void SimulationEngine::handle_fault_recovered(const Event& event) {
+    auto it = registered_faults_.find(event.fault_id);
+    if (it == registered_faults_.end()) return;
+
+    const FaultConfig& fault = it->second;
+    if (fault.type == FaultType::SERVICE_OUTAGE) {
+        Node* node = topology_.get_node_mut(fault.target_component_id);
+        if (node) {
+            node->set_state(ComponentState::UP);
+        }
+    } else if (fault.type == FaultType::LATENCY_SPIKE) {
+        auto* link = const_cast<Link*>(topology_.get_link(fault.target_component_id));
+        if (link) {
+            link->clear_extra_latency();
+        }
+    }
 }
 
 } // namespace ghostnet

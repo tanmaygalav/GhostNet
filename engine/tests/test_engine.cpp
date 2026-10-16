@@ -2,7 +2,7 @@
 #include "ghostnet/engine.hpp"
 
 // Setup a simple 2-node topology: Client(1) -> Link(101) -> Service(2)
-ghostnet::Topology create_two_node_topology(SimTime delay_us, double loss_prob, SimTime proc_delay_us) {
+ghostnet::Topology create_two_node_topology(ghostnet::SimTime delay_us, double loss_prob, ghostnet::SimTime proc_delay_us) {
     ghostnet::Topology topo;
     topo.add_node({.id = 1, .name = "Client", .type = ghostnet::NodeType::CLIENT});
     topo.add_node({.id = 2, .name = "Backend", .type = ghostnet::NodeType::SERVICE, .base_processing_delay = proc_delay_us});
@@ -36,7 +36,7 @@ TEST(EngineTest, SimulatesRequestsWithCorrectLatency) {
     EXPECT_EQ(status, ghostnet::RunStatus::COMPLETED);
 
     auto metrics = engine.get_metrics();
-    EXPECT_EQ(metrics.total_generated, 4); // 0, 500ms, 1000ms, 1500ms
+    EXPECT_EQ(metrics.total_generated, 4);
     EXPECT_EQ(metrics.total_completed, 4);
     EXPECT_EQ(metrics.total_failed, 0);
 
@@ -88,7 +88,6 @@ TEST(EngineTest, StrictDeterminismAcrossIdenticalRuns) {
     auto m1 = run_sim(777);
     auto m2 = run_sim(777);
 
-    // Guaranteed bit-for-bit equivalence
     EXPECT_EQ(m1.total_generated, m2.total_generated);
     EXPECT_EQ(m1.total_completed, m2.total_completed);
     EXPECT_EQ(m1.total_failed, m2.total_failed);
