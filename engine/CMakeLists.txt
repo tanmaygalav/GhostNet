@@ -51,6 +51,7 @@ enable_testing()
 add_executable(engine_tests
     tests/test_scheduler.cpp
     tests/test_topology.cpp
+    tests/test_request_rng.cpp
 )
 target_link_libraries(engine_tests PRIVATE
     ghostnet_core
