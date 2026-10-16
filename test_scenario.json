@@ -1,0 +1,40 @@
+{
+  "config": {
+    "seed": 42,
+    "max_duration_us": 3000000,
+    "max_events": 100000
+  },
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Frontend-Client",
+      "type": "CLIENT"
+    },
+    {
+      "id": 2,
+      "name": "Auth-Service",
+      "type": "SERVICE",
+      "processing_delay_us": 4000
+    }
+  ],
+  "links": [
+    {
+      "id": 101,
+      "source_id": 1,
+      "target_id": 2,
+      "propagation_delay_us": 15000,
+      "bandwidth_bps": 10000000,
+      "loss_probability": 0.1
+    }
+  ],
+  "workloads": [
+    {
+      "source_id": 1,
+      "target_id": 2,
+      "arrival_rate_rps": 5.0,
+      "duration_us": 3000000,
+      "timeout_us": 1000000,
+      "payload_bytes": 128
+    }
+  ]
+}
